@@ -2,15 +2,23 @@
 import threading
 import time
 import queue
-import urllib.request
+import glob
+from urllib import request
+
+headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; WOW64)'
+                        ' AppleWebKit/537.36 (KHTML, like Gecko)'}
+timeout = 10
+
 
 class FacesReptile(threading.Thread):
-    def __init__(self, thread_id, que_idx, que_und, que_liner):
+    def __init__(self, thread_id, que_num, que_idx, que_und, que_liner):
         threading.Thread.__init__(self)
         self.thread_id = thread_id
         self.que_idx = que_idx
         self.que_und = que_und
         self.que_liner = que_liner
+        self.que_num = que_num
+        self.root = 'images'
 
     def run(self):
         while not self.que_liner.empty():
@@ -24,17 +32,31 @@ class FacesReptile(threading.Thread):
         face_id = content[2]
         url = content[3]
         bbox = content[4]
+        format = url[-3:]
+
+        counter = glob.glob('{}/{}/*'.format(self.root, name))
 
         try:
-            urllib.request.urlopen('http://upload.wikimedia.org/wikipedia/commons/5/5d/AaronEckhart10TIFF.jpg')
-            urllib.urlretrieve()
+            req = request.Request(url, headers=headers)
+            response = request.urlopen(req, timeout=timeout)
+            data = response.read()
+            save_path = '{}/{}/{}.{}'.format(self.root, name, counter+1, format)
+            file = open(save_path, 'bw')
+            file.write(data)
+            collect_info = '{}\t{}\t{}\t{}\t{}\n'\
+                .format(name, save_path, bbox, img_id, face_id)
+            self.que_idx.put(collect_info)
+            print('thread{}: {}, save {} success'
+                  .format(self.thread_id, self.que_num.get(), save_path))
         except:
-            pass
+            self.que_und.put(liner)
+            print('thread{}: {} fail'.format(self.thread_id, url))
 
 
-def get_information_queue(path, type, num_thread):
-    src_file = open('{}/facescrub_{}.txt'.format(path, type), 'r')
+def get_information_queue(type, num_thread):
+    src_file = open('facescrub_{}.txt'.format(type), 'r')
     liner_que = queue.Queue()
+    number_que = queue.Queue()
 
     # construct liner queue
     for liner in src_file:
@@ -42,55 +64,58 @@ def get_information_queue(path, type, num_thread):
         liner_que.put(content)
 
     # distribute urls
-    counter = int(liner_que.qsize() / num_thread)
+    average_per_thread = int(liner_que.qsize() / num_thread)
     queue_list = []
+    number = 0
     for n in range(num_thread):
         queue_list.append(queue.Queue())
-        i = 0
-        while i < counter and not liner_que.empty():
+        counter = 0
+        while counter < average_per_thread and not liner_que.empty():
             queue_list[n].put_nowait(liner_que.get_nowait()) # no wait
-            i += 1
+            number += 1
+            counter += 1
+            number_que.put_nowait(number)
+
     # return queue list
-    return queue_list
+    return queue_list, number_que
 
 
 def grab_faces(path, type, num_thread):
-    src_file = open('{}/facescrub_{}.txt'.format(path, type), 'r')
-    idx_file = open('{}/record/facescrub_idx_{}.txt'.format(path, type), 'w')
-    und_file = open('')
+    file_idx = open('record/facescrub_idx_{}.txt'.format(type), 'w')
+    file_und = open('record/facescrub_und_{}.txt'.format(type), 'w')
 
-    queue_list = get_information_queue('H:\DATA\FaceScrub', 'actors', 4)
+    queue_list, number_que = get_information_queue('actors', 4)
     assert len(queue_list) == num_thread
 
     queue_list_idx = queue.Queue()
     queue_list_und = queue.Queue()
 
     # create faces reptiles
+    thread_list = []
     for n in range(num_thread):
-        reptile = FacesReptile(n, queue_list_idx, queue_list_und, queue_list[n])
+        reptile = FacesReptile(n, number_que, queue_list_idx,
+                               queue_list_und, queue_list[n])
         reptile.start()
+        thread_list.append(reptile)
 
-    # for
+    for thread in thread_list:
+        thread.join()
 
+    while not queue_list_idx.empty():
+        liner = queue_list_idx.get_nowait()
+        file_idx.write(liner)
+    while not queue_list_und.empty():
+        liner = queue_list_und.get_nowait()
+        file_und.write(liner)
 
+    file_idx.close()
+    file_und.close()
+
+    print('finish {}...'.format(type))
 
 
 
 if __name__ == '__main__':
-    # get_information_queue('H:\DATA\FaceScrub', 'actors', 4)
-    # data = urllib.request.urlopen('http://upload.wikimedia.org/wikipedia/commons/5/5d/AaronEckhart10TIFF2.jpg')
-    # data = urllib.request.urlopen('http://www.google.com.hk')
-    # print(data.read())
-
-    url = 'http://upload.wikimedia.org/wikipedia/commons/5/5d/AaronEckhart10TIFF.jpg'
-    urllib.urlretrieve(url, 'tmp.jpg')
-    try:
-        data = urllib.request.urlopen(url)
-        urllib.urlretrieve(url, 'tmp.jpg')
-        print(data)
-        print('success')
-    except:
-        print(data)
-        print('fail')
-
+    grab_faces('images', 'actors', 4)
+    grab_faces('images', 'actresses', 4)
 
