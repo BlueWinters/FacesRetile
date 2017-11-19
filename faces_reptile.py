@@ -7,7 +7,7 @@ from urllib import request
 
 headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; WOW64)'
                         ' AppleWebKit/537.36 (KHTML, like Gecko)'}
-timeout = 10
+timeout = 20
 
 
 class FacesReptile(threading.Thread):
@@ -34,7 +34,7 @@ class FacesReptile(threading.Thread):
         bbox = content[4]
         format = url[-3:]
 
-        counter = glob.glob('{}/{}/*'.format(self.root, name))
+        counter = len(glob.glob('{}/{}/*'.format(self.root, name)))
 
         try:
             req = request.Request(url, headers=headers)
@@ -46,11 +46,11 @@ class FacesReptile(threading.Thread):
             collect_info = '{}\t{}\t{}\t{}\t{}\n'\
                 .format(name, save_path, bbox, img_id, face_id)
             self.que_idx.put(collect_info)
-            print('thread{}: {}, save {} success'
+            print('thread-{}: No{:6d}, save to {} success'
                   .format(self.thread_id, self.que_num.get(), save_path))
         except:
             self.que_und.put(liner)
-            print('thread{}: {} fail'.format(self.thread_id, url))
+            print('thread-{}: {} fail'.format(self.thread_id, url))
 
 
 def get_information_queue(type, num_thread):
@@ -60,8 +60,7 @@ def get_information_queue(type, num_thread):
 
     # construct liner queue
     for liner in src_file:
-        content = liner.split('\t')
-        liner_que.put(content)
+        liner_que.put(liner)
 
     # distribute urls
     average_per_thread = int(liner_que.qsize() / num_thread)
@@ -84,7 +83,7 @@ def grab_faces(path, type, num_thread):
     file_idx = open('record/facescrub_idx_{}.txt'.format(type), 'w')
     file_und = open('record/facescrub_und_{}.txt'.format(type), 'w')
 
-    queue_list, number_que = get_information_queue('actors', 4)
+    queue_list, number_que = get_information_queue('actors', num_thread)
     assert len(queue_list) == num_thread
 
     queue_list_idx = queue.Queue()
@@ -116,6 +115,6 @@ def grab_faces(path, type, num_thread):
 
 
 if __name__ == '__main__':
-    grab_faces('images', 'actors', 4)
-    grab_faces('images', 'actresses', 4)
+    grab_faces('images', 'actors', 6)
+    grab_faces('images', 'actresses', 6)
 
