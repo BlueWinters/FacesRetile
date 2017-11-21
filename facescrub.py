@@ -1,6 +1,5 @@
 
 import threading
-import time
 import queue
 import glob
 from urllib import request
@@ -10,7 +9,7 @@ headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; WOW64)'
 timeout = 20
 
 
-class FacesReptile(threading.Thread):
+class FaceScrub(threading.Thread):
     def __init__(self, thread_id, que_num, que_idx, que_und, que_liner):
         threading.Thread.__init__(self)
         self.thread_id = thread_id
@@ -92,7 +91,7 @@ def grab_faces(path, type, num_thread):
     # create faces reptiles
     thread_list = []
     for n in range(num_thread):
-        reptile = FacesReptile(n, number_que, queue_list_idx,
+        reptile = FaceScrub(n, number_que, queue_list_idx,
                                queue_list_und, queue_list[n])
         reptile.start()
         thread_list.append(reptile)
